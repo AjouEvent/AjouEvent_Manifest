@@ -1,0 +1,263 @@
+apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata:
+  name: fluent-bit
+  namespace: argocd
+spec:
+  project: default
+  source:
+    repoURL: https://fluent.github.io/helm-charts
+    chart: fluent-bit
+    targetRevision: 0.50.0
+    helm:
+      values: |
+        # DaemonSet으로 변경하여 각 노드에서 로그 수집
+        kind: DaemonSet
+        
+        image:
+          repository: cr.fluentbit.io/fluent/fluent-bit
+          pullPolicy: IfNotPresent
+        
+        rbac:
+          create: true
+          nodeAccess: true  # 노드 접근 권한 필요
+        
+        # 노드의 로그 디렉토리에 접근하기 위한 볼륨 마운트
+        daemonSetVolumes:
+          - name: varlog
+            hostPath:
+              path: /var/log
+          - name: varlibdockercontainers
+            hostPath:
+              path: /var/lib/docker/containers
+          - name: etcmachineid
+            hostPath:
+              path: /etc/machine-id
+              type: File
+        
+        daemonSetVolumeMounts:
+          - name: varlog
+            mountPath: /var/log
+          - name: varlibdockercontainers
+            mountPath: /var/lib/docker/containers
+            readOnly: true
+          - name: etcmachineid
+            mountPath: /etc/machine-id
+            readOnly: true
+        
+        # 모든 노드에 배포하되, 필터링으로 특정 애플리케이션만 수집
+        # nodeSelector: {}  # 주석 처리하여 모든 노드에 배포
+        
+        config:
+          service: |
+            [SERVICE]
+                Daemon Off
+                Flush 5
+                Log_Level info
+                Parsers_File /fluent-bit/etc/parsers.conf
+                Parsers_File /fluent-bit/etc/conf/custom_parsers.conf
+                HTTP_Server On
+                HTTP_Listen 0.0.0.0
+                HTTP_Port 2020
+                Health_Check On
+          
+          inputs: |
+            # Pet Clinic 애플리케이션 로그만 수집
+            [INPUT]
+                Name tail
+                Path /var/log/containers/petclinic-*_petclinic_*.log
+                multiline.parser docker, cri
+                Tag kube.petclinic
+                Mem_Buf_Limit 50MB
+                Skip_Long_Lines On
+                Refresh_Interval 10
+                
+            # 모든 컨테이너 로그 수집 후 필터링
+            [INPUT]
+                Name tail
+                Path /var/log/containers/*.log
+                multiline.parser docker, cri
+                Tag kube.all
+                Mem_Buf_Limit 50MB
+                Skip_Long_Lines On
+                Refresh_Interval 10
+          
+          filters: |
+            # Kubernetes 메타데이터 추가
+            [FILTER]
+                Name kubernetes
+                Match kube.*
+                Merge_Log On
+                Keep_Log Off
+                K8S-Logging.Parser On
+                K8S-Logging.Exclude On
+                Annotations Off
+                Labels On
+                
+            # Pet Clinic 애플리케이션만 필터링 (라벨 기반)
+            [FILTER]
+                Name grep
+                Match kube.all
+                Regex kubernetes_labels_app spring-petclinic
+                
+            # Pet Clinic 네임스페이스 필터링
+            [FILTER]
+                Name grep
+                Match kube.all
+                Regex kubernetes_namespace_name petclinic
+                
+            # 필터링된 로그를 petclinic 태그로 변경
+            [FILTER]
+                Name modify
+                Match kube.all
+                Set tag petclinic
+                
+            # Pet Clinic 로그 파싱 (Spring Boot 표준 로그 포맷)
+            [FILTER]
+                Name parser
+                Match petclinic
+                Key_Name log
+                Parser spring_boot_log
+                Reserve_Data On
+                
+            # 불필요한 필드 제거 및 메타데이터 추가
+            [FILTER]
+                Name modify
+                Match petclinic
+                Remove_wildcard _p
+                Add source fluent-bit
+                Add application spring-petclinic
+                Add environment production
+                
+            # 로그 레벨별 라우팅
+            [FILTER]
+                Name rewrite_tag
+                Match petclinic
+                Rule $log (?i)(error|exception|fatal) petclinic.error false
+                Rule $log (?i)(warn|warning) petclinic.warn false
+                Rule $log (?i)(info) petclinic.info false
+                Rule $log (?i)(debug|trace) petclinic.debug false
+                Emitter_Name re_emitted
+          
+          outputs: |
+            # Pet Clinic 로그를 Elasticsearch로 전송
+            [OUTPUT]
+                Name es
+                Match petclinic
+                Host my-es-cluster-es-http.elastic.svc.cluster.local
+                Port 9200
+                Logstash_Format On
+                Logstash_Prefix petclinic-logs
+                Logstash_DateFormat %Y.%m.%d
+                Replace_Dots On
+                Retry_Limit False
+                Buffer_Size 1MB
+                tls On
+                tls.verify Off
+                HTTP_User elastic
+                HTTP_Passwd ${ELASTIC_PASSWORD}
+                Suppress_Type_Name On
+                Generate_ID On
+                
+            # 에러 로그는 별도 인덱스로 전송
+            [OUTPUT]
+                Name es
+                Match petclinic.error
+                Host my-es-cluster-es-http.elastic.svc.cluster.local
+                Port 9200
+                Logstash_Format On
+                Logstash_Prefix petclinic-errors
+                Logstash_DateFormat %Y.%m.%d
+                Replace_Dots On
+                Retry_Limit False
+                Buffer_Size 1MB
+                tls On
+                tls.verify Off
+                HTTP_User elastic
+                HTTP_Passwd ${ELASTIC_PASSWORD}
+                Suppress_Type_Name On
+                Generate_ID On
+                
+            # 경고 로그도 별도 인덱스로 전송
+            [OUTPUT]
+                Name es
+                Match petclinic.warn
+                Host my-es-cluster-es-http.elastic.svc.cluster.local
+                Port 9200
+                Logstash_Format On
+                Logstash_Prefix petclinic-warnings
+                Logstash_DateFormat %Y.%m.%d
+                Replace_Dots On
+                Retry_Limit False
+                Buffer_Size 1MB
+                tls On
+                tls.verify Off
+                HTTP_User elastic
+                HTTP_Passwd ${ELASTIC_PASSWORD}
+                Suppress_Type_Name On
+                Generate_ID On
+          
+          # Spring Boot 로그를 위한 커스텀 파서
+          customParsers: |
+            [PARSER]
+                Name spring_boot_log
+                Format regex
+                Regex ^(?<timestamp>\d{4}-\d{2}-\d{2}\s+\d{2}:\d{2}:\d{2}\.\d{3})\s+(?<level>\w+)\s+(?<pid>\d+)\s+---\s+\[(?<thread>.*?)\]\s+(?<logger>\S+)\s*:\s+(?<message>.*)
+                Time_Key timestamp
+                Time_Format %Y-%m-%d %H:%M:%S.%L
+                Time_Keep On
+                
+            [PARSER]
+                Name spring_json
+                Format json
+                Time_Key timestamp
+                Time_Format %Y-%m-%dT%H:%M:%S.%L
+                Time_Keep On
+        
+        # 환경 변수 설정
+        env:
+          - name: ELASTIC_PASSWORD
+            valueFrom:
+              secretKeyRef:
+                name: my-es-cluster-es-elastic-user
+                key: elastic
+          - name: NODE_NAME
+            valueFrom:
+              fieldRef:
+                fieldPath: spec.nodeName
+        
+        # 리소스 제한 설정
+        resources:
+          limits:
+            memory: 200Mi
+            cpu: 200m
+          requests:
+            memory: 100Mi
+            cpu: 100m
+        
+        # 모니터링을 위한 서비스 설정
+        service:
+          type: ClusterIP
+          port: 2020
+          annotations:
+            prometheus.io/scrape: "true"
+            prometheus.io/port: "2020"
+            prometheus.io/path: "/api/v1/metrics/prometheus"
+        
+        # 로그 레벨 설정
+        logLevel: info
+        
+        # Hot reload 활성화 (설정 변경 시 자동 재로드)
+        hotReload:
+          enabled: true
+  
+  destination:
+    server: https://kubernetes.default.svc
+    namespace: fluent-bit
+  
+  syncPolicy:
+    automated:
+      prune: true
+      selfHeal: true
+    syncOptions:
+      - CreateNamespace=true

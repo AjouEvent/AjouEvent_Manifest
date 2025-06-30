@@ -1,0 +1,17 @@
+apiVersion: kibana.k8s.elastic.co/v1
+kind: Kibana
+metadata:
+  name: my-kibana-instance
+  namespace: kibana 
+spec:
+  version: 8.5.1 
+  count: 1       
+  elasticsearchRef:
+    name: my-es-cluster 
+  http: 
+    service:
+      spec:
+        type: NodePort 
+        ports:
+          - port: 5601 
+            nodePort: 30601 

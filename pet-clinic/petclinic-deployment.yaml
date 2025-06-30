@@ -1,0 +1,121 @@
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: petclinic
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: spring-petclinic
+  namespace: petclinic
+  labels:
+    app: spring-petclinic
+    component: backend
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: spring-petclinic
+  template:
+    metadata:
+      labels:
+        app: spring-petclinic
+        component: backend
+        tier: application
+    spec:
+      containers:
+      - name: petclinic
+        image: springcommunity/spring-petclinic:latest
+        ports:
+        - containerPort: 8080
+        env:
+        - name: SPRING_PROFILES_ACTIVE
+          value: "mysql"
+        - name: MYSQL_URL
+          value: "jdbc:mysql://mysql:3306/petclinic"
+        - name: MYSQL_USER
+          value: "petclinic"
+        - name: MYSQL_PASS
+          value: "petclinic"
+        resources:
+          requests:
+            memory: "512Mi"
+            cpu: "500m"
+          limits:
+            memory: "1Gi"
+            cpu: "1000m"
+        # 로깅 설정을 위한 JVM 옵션
+        env:
+        - name: JAVA_OPTS
+          value: "-Dlogging.level.org.springframework.samples.petclinic=INFO -Dlogging.pattern.console=%d{yyyy-MM-dd HH:mm:ss} - %msg%n"
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: spring-petclinic-service
+  namespace: petclinic
+  labels:
+    app: spring-petclinic
+spec:
+  type: LoadBalancer
+  ports:
+  - port: 80
+    targetPort: 8080
+    protocol: TCP
+  selector:
+    app: spring-petclinic
+---
+# MySQL 데이터베이스 (Pet Clinic이 사용)
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: mysql
+  namespace: petclinic
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: mysql
+  template:
+    metadata:
+      labels:
+        app: mysql
+    spec:
+      containers:
+      - name: mysql
+        image: mysql:8.0
+        env:
+        - name: MYSQL_ROOT_PASSWORD
+          value: "root"
+        - name: MYSQL_DATABASE
+          value: "petclinic"
+        - name: MYSQL_USER
+          value: "petclinic"
+        - name: MYSQL_PASSWORD
+          value: "petclinic"
+        ports:
+        - containerPort: 3306
+        volumeMounts:
+        - name: mysql-storage
+          mountPath: /var/lib/mysql
+        resources:
+          requests:
+            memory: "256Mi"
+            cpu: "250m"
+          limits:
+            memory: "512Mi"
+            cpu: "500m"
+      volumes:
+      - name: mysql-storage
+        emptyDir: {}
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: mysql
+  namespace: petclinic
+spec:
+  ports:
+  - port: 3306
+  selector:
+    app: mysql
