@@ -253,7 +253,7 @@ spec:
   
   destination:
     server: https://kubernetes.default.svc
-    namespace: fluent-bit
+    namespace: elastic
   
   syncPolicy:
     automated:
