@@ -96,6 +96,18 @@ spec:
                 Match kube.var.log.containers.*
                 Set tag elastic
                 
+            # MySQL 네임스페이스 필터링
+            [FILTER]
+                Name grep
+                Match kube.var.log.containers.*
+                Regex kubernetes_namespace_name mysql
+                
+            # 필터링된 MySQL 로그를 mysql 태그로 변경
+            [FILTER]
+                Name modify
+                Match kube.var.log.containers.*
+                Set tag mysql
+                
             # Elastic 로그 파싱 (JSON 로그 포맷)
             [FILTER]
                 Name parser
@@ -121,6 +133,33 @@ spec:
                 Rule $log (?i)(warn|warning) elastic.warn false
                 Rule $log (?i)(info) elastic.info false
                 Rule $log (?i)(debug|trace) elastic.debug false
+                Emitter_Name re_emitted
+                
+            # MySQL 로그 파싱 (MySQL 특화 파서)
+            [FILTER]
+                Name parser
+                Match mysql
+                Key_Name log
+                Parser mysql_log
+                Reserve_Data On
+                
+            # MySQL: 불필요한 필드 제거 및 메타데이터 추가
+            [FILTER]
+                Name modify
+                Match mysql
+                Remove_wildcard _p
+                Add source fluent-bit
+                Add application mysql-database
+                Add environment production
+                
+            # MySQL 로그 레벨별 라우팅
+            [FILTER]
+                Name rewrite_tag
+                Match mysql
+                Rule $log (?i)(error|exception|fatal) mysql.error false
+                Rule $log (?i)(warn|warning) mysql.warn false
+                Rule $log (?i)(info) mysql.info false
+                Rule $log (?i)(debug|trace) mysql.debug false
                 Emitter_Name re_emitted
           
           outputs: |
@@ -180,6 +219,63 @@ spec:
                 HTTP_Passwd ${ELASTIC_PASSWORD}
                 Suppress_Type_Name On
                 Generate_ID On
+                
+            # MySQL 스택 로그를 Elasticsearch로 전송
+            [OUTPUT]
+                Name es
+                Match mysql
+                Host my-es-cluster-es-http.elastic.svc.cluster.local
+                Port 9200
+                Logstash_Format On
+                Logstash_Prefix mysql-logs
+                Logstash_DateFormat %Y.%m.%d
+                Replace_Dots On
+                Retry_Limit False
+                Buffer_Size 1MB
+                tls On
+                tls.verify Off
+                HTTP_User elastic
+                HTTP_Passwd ${ELASTIC_PASSWORD}
+                Suppress_Type_Name On
+                Generate_ID On
+                
+            # MySQL 에러 로그는 별도 인덱스로 전송
+            [OUTPUT]
+                Name es
+                Match mysql.error
+                Host my-es-cluster-es-http.elastic.svc.cluster.local
+                Port 9200
+                Logstash_Format On
+                Logstash_Prefix mysql-errors
+                Logstash_DateFormat %Y.%m.%d
+                Replace_Dots On
+                Retry_Limit False
+                Buffer_Size 1MB
+                tls On
+                tls.verify Off
+                HTTP_User elastic
+                HTTP_Passwd ${ELASTIC_PASSWORD}
+                Suppress_Type_Name On
+                Generate_ID On
+                
+            # MySQL 경고 로그도 별도 인덱스로 전송
+            [OUTPUT]
+                Name es
+                Match mysql.warn
+                Host my-es-cluster-es-http.elastic.svc.cluster.local
+                Port 9200
+                Logstash_Format On
+                Logstash_Prefix mysql-warnings
+                Logstash_DateFormat %Y.%m.%d
+                Replace_Dots On
+                Retry_Limit False
+                Buffer_Size 1MB
+                tls On
+                tls.verify Off
+                HTTP_User elastic
+                HTTP_Passwd ${ELASTIC_PASSWORD}
+                Suppress_Type_Name On
+                Generate_ID On
           
           # Spring Boot 로그를 위한 커스텀 파서
           customParsers: |
@@ -194,6 +290,14 @@ spec:
             [PARSER]
                 Name spring_json
                 Format json
+                Time_Key timestamp
+                Time_Format %Y-%m-%dT%H:%M:%S.%L
+                Time_Keep On
+                
+            [PARSER]
+                Name mysql_log
+                Format regex
+                Regex ^(?<timestamp>\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}\.\d{6}Z)\s+(?<thread_id>\d+)\s+\[(?<level>\w+)\]\s+\[(?<subsystem>[\w\.]+)\]\s+(?<message>.*)
                 Time_Key timestamp
                 Time_Format %Y-%m-%dT%H:%M:%S.%L
                 Time_Keep On
