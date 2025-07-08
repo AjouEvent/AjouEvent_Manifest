@@ -84,60 +84,55 @@ spec:
                 Annotations Off
                 Labels On
                 
-            # Pet Clinic 애플리케이션만 필터링 (라벨 기반)
+            # Elastic 네임스페이스 필터링 (Elasticsearch, Kibana 등)
             [FILTER]
                 Name grep
                 Match kube.var.log.containers.*
-                Regex kubernetes_labels_app spring-petclinic
+                Regex kubernetes_namespace_name elastic
                 
-            # Pet Clinic 네임스페이스 필터링
-            [FILTER]
-                Name grep
-                Match kube.var.log.containers.*
-                Regex kubernetes_namespace_name petclinic
-                
-            # 필터링된 로그를 petclinic 태그로 변경
+            # 필터링된 Elastic 로그를 elastic 태그로 변경
             [FILTER]
                 Name modify
                 Match kube.var.log.containers.*
-                Set tag petclinic
+                Set tag elastic
                 
-            # Pet Clinic 로그 파싱 (Spring Boot 표준 로그 포맷)
+            # Elastic 로그 파싱 (JSON 로그 포맷)
             [FILTER]
                 Name parser
-                Match petclinic
+                Match elastic
                 Key_Name log
-                Parser spring_boot_log
+                Parser spring_json
                 Reserve_Data On
                 
-            # 불필요한 필드 제거 및 메타데이터 추가
+            # Elastic: 불필요한 필드 제거 및 메타데이터 추가
             [FILTER]
                 Name modify
-                Match petclinic
+                Match elastic
                 Remove_wildcard _p
                 Add source fluent-bit
-                Add application spring-petclinic
+                Add application elastic-stack
                 Add environment production
                 
-            # 로그 레벨별 라우팅
+            # Elastic 로그 레벨별 라우팅
             [FILTER]
                 Name rewrite_tag
-                Match petclinic
-                Rule $log (?i)(error|exception|fatal) petclinic.error false
-                Rule $log (?i)(warn|warning) petclinic.warn false
-                Rule $log (?i)(info) petclinic.info false
-                Rule $log (?i)(debug|trace) petclinic.debug false
+                Match elastic
+                Rule $log (?i)(error|exception|fatal) elastic.error false
+                Rule $log (?i)(warn|warning) elastic.warn false
+                Rule $log (?i)(info) elastic.info false
+                Rule $log (?i)(debug|trace) elastic.debug false
                 Emitter_Name re_emitted
           
           outputs: |
-            # Pet Clinic 로그를 Elasticsearch로 전송
+                
+            # Elastic 스택 로그를 Elasticsearch로 전송
             [OUTPUT]
                 Name es
-                Match petclinic
+                Match elastic
                 Host my-es-cluster-es-http.elastic.svc.cluster.local
                 Port 9200
                 Logstash_Format On
-                Logstash_Prefix petclinic-logs
+                Logstash_Prefix elastic-logs
                 Logstash_DateFormat %Y.%m.%d
                 Replace_Dots On
                 Retry_Limit False
@@ -149,14 +144,14 @@ spec:
                 Suppress_Type_Name On
                 Generate_ID On
                 
-            # 에러 로그는 별도 인덱스로 전송
+            # Elastic 에러 로그는 별도 인덱스로 전송
             [OUTPUT]
                 Name es
-                Match petclinic.error
+                Match elastic.error
                 Host my-es-cluster-es-http.elastic.svc.cluster.local
                 Port 9200
                 Logstash_Format On
-                Logstash_Prefix petclinic-errors
+                Logstash_Prefix elastic-errors
                 Logstash_DateFormat %Y.%m.%d
                 Replace_Dots On
                 Retry_Limit False
@@ -168,14 +163,14 @@ spec:
                 Suppress_Type_Name On
                 Generate_ID On
                 
-            # 경고 로그도 별도 인덱스로 전송
+            # Elastic 경고 로그도 별도 인덱스로 전송
             [OUTPUT]
                 Name es
-                Match petclinic.warn
+                Match elastic.warn
                 Host my-es-cluster-es-http.elastic.svc.cluster.local
                 Port 9200
                 Logstash_Format On
-                Logstash_Prefix petclinic-warnings
+                Logstash_Prefix elastic-warnings
                 Logstash_DateFormat %Y.%m.%d
                 Replace_Dots On
                 Retry_Limit False
