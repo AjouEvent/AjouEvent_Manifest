@@ -23,13 +23,22 @@ spec:
           name: mysql
         env:
         - name: MYSQL_ROOT_PASSWORD
-          value: "rootpassword"
+          valueFrom:
+            secretKeyRef:
+              name: mysql-credentials
+              key: root-password
         - name: MYSQL_DATABASE
           value: "ajouevent"
         - name: MYSQL_USER
-          value: "ajouevent"
+          valueFrom:
+            secretKeyRef:
+              name: mysql-credentials
+              key: username
         - name: MYSQL_PASSWORD
-          value: "ajouevent123"
+          valueFrom:
+            secretKeyRef:
+              name: mysql-credentials
+              key: password
         volumeMounts:
         - name: mysql-storage
           mountPath: /var/lib/mysql

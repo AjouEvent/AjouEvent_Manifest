@@ -4,6 +4,7 @@ kind: Kustomization
 namespace: mysql
 
 resources:
+  - mysql-secret.yaml
   - mysql-configmap.yaml
   - mysql-pvc.yaml
   - mysql-deployment.yaml
