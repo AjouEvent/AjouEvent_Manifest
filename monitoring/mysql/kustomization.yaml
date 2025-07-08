@@ -4,16 +4,17 @@ kind: Kustomization
 namespace: mysql
 
 resources:
-  - mysql-secret.yaml
   - mysql-configmap.yaml
   - mysql-pvc.yaml
   - mysql-deployment.yaml
   - mysql-service.yaml
   - mysql-exporter.yaml
 
-commonLabels:
-  app: mysql
-  component: database
+labels:
+  - includeSelectors: true
+    pairs:
+      app: mysql
+      component: database
 
 images:
   - name: mysql

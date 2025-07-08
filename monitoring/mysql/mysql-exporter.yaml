@@ -29,15 +29,9 @@ spec:
           echo "MySQL 연결 확인됨"
         env:
         - name: MYSQL_USER
-          valueFrom:
-            secretKeyRef:
-              name: mysql-credentials
-              key: username
+          value: "ajouevent"
         - name: MYSQL_PASSWORD
-          valueFrom:
-            secretKeyRef:
-              name: mysql-credentials
-              key: password
+          value: "ajouevent123"
       containers:
       - name: mysql-exporter
         image: prom/mysqld-exporter:v0.15.1
@@ -46,10 +40,7 @@ spec:
           name: metrics
         env:
         - name: DATA_SOURCE_NAME
-          valueFrom:
-            secretKeyRef:
-              name: mysql-credentials
-              key: exporter-dsn
+          value: "ajouevent:ajouevent123@tcp(mysql.mysql.svc.cluster.local:3306)/ajouevent"
         resources:
           requests:
             memory: "64Mi"
