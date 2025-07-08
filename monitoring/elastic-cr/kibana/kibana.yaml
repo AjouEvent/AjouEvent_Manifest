@@ -10,7 +10,10 @@ spec:
     name: my-es-cluster 
   config:
     elasticsearch.ssl.verificationMode: none
-  http: 
+  http:
+    tls:
+      selfSignedCertificate:
+        disabled: true
     service:
       spec:
         type: NodePort 
