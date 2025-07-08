@@ -1,0 +1,32 @@
+apiVersion: v1
+kind: Service
+metadata:
+  name: mysql
+  namespace: mysql
+  labels:
+    app: mysql
+spec:
+  type: ClusterIP
+  ports:
+  - port: 3306
+    targetPort: 3306
+    name: mysql
+  selector:
+    app: mysql
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: mysql-nodeport
+  namespace: mysql
+  labels:
+    app: mysql
+spec:
+  type: NodePort
+  ports:
+  - port: 3306
+    targetPort: 3306
+    nodePort: 30306
+    name: mysql
+  selector:
+    app: mysql 
