@@ -8,6 +8,8 @@ spec:
   count: 1       
   elasticsearchRef:
     name: my-es-cluster 
+  config:
+    elasticsearch.ssl.verificationMode: none
   http: 
     service:
       spec:

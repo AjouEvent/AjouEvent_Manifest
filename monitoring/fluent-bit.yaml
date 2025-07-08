@@ -62,22 +62,12 @@ spec:
                 Health_Check On
           
           inputs: |
-            # Pet Clinic 애플리케이션 로그만 수집
-            [INPUT]
-                Name tail
-                Path /var/log/containers/petclinic-*_petclinic_*.log
-                multiline.parser docker, cri
-                Tag kube.petclinic
-                Mem_Buf_Limit 50MB
-                Skip_Long_Lines On
-                Refresh_Interval 10
-                
             # 모든 컨테이너 로그 수집 후 필터링
             [INPUT]
                 Name tail
                 Path /var/log/containers/*.log
+                Tag kube.var.log.containers.all
                 multiline.parser docker, cri
-                Tag kube.all
                 Mem_Buf_Limit 50MB
                 Skip_Long_Lines On
                 Refresh_Interval 10
@@ -86,7 +76,7 @@ spec:
             # Kubernetes 메타데이터 추가
             [FILTER]
                 Name kubernetes
-                Match kube.*
+                Match kube.var.log.containers.*
                 Merge_Log On
                 Keep_Log Off
                 K8S-Logging.Parser On
@@ -97,19 +87,19 @@ spec:
             # Pet Clinic 애플리케이션만 필터링 (라벨 기반)
             [FILTER]
                 Name grep
-                Match kube.all
+                Match kube.var.log.containers.*
                 Regex kubernetes_labels_app spring-petclinic
                 
             # Pet Clinic 네임스페이스 필터링
             [FILTER]
                 Name grep
-                Match kube.all
+                Match kube.var.log.containers.*
                 Regex kubernetes_namespace_name petclinic
                 
             # 필터링된 로그를 petclinic 태그로 변경
             [FILTER]
                 Name modify
-                Match kube.all
+                Match kube.var.log.containers.*
                 Set tag petclinic
                 
             # Pet Clinic 로그 파싱 (Spring Boot 표준 로그 포맷)
