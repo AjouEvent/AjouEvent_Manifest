@@ -124,7 +124,6 @@ spec:
                 Emitter_Name re_emitted
           
           outputs: |
-                
             # Elastic 스택 로그를 Elasticsearch로 전송
             [OUTPUT]
                 Name es
